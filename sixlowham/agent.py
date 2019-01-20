@@ -59,7 +59,7 @@ class SixLowHAMAgent(object):
         self._if_mac_given = if_mac is not None
         self._if_mac = if_mac
         self._if_mtu_given = if_mtu is not None
-        self._if_mtu = mtu
+        self._if_mtu = if_mtu
         self._tx_attempts = tx_attempts
         self._log = log
 
@@ -119,7 +119,7 @@ class SixLowHAMAgent(object):
 
         (self._transport, self._protocol) = yield from \
                 asyncio.get_event_loop().subprocess_exec(
-                        lambda : SixLowHamAgentProtocol(self),
+                        lambda : SixLowHAMAgentProtocol(self),
                         *args,
                         stdin=asyncio.subprocess.PIPE,
                         stdout=asyncio.subprocess.PIPE)
@@ -201,7 +201,7 @@ class SixLowHAMAgent(object):
         # Do we ACK or NAK this?
         if frametype in (SOH, FS, SYN):
             self._send_frame(ACK)
-        else if frametype not in (ACK, NAK):
+        elif frametype not in (ACK, NAK):
             # Don't recognise the frame
             self._send_frame(NAK)
 
