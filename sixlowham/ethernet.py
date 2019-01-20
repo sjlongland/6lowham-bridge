@@ -5,6 +5,8 @@
 import re
 import construct
 
+from .util import tobytes, checktypes
+
 
 class EthernetMACAddress(object):
     """
@@ -24,16 +26,12 @@ class EthernetMACAddress(object):
         if isinstance(address, str):
             address = self.fromstr(address)
 
-        if hasattr(address, '__bytes__'):
-            address = bytes(address)
-
-        if not isinstance(address, bytes):
-            raise TypeError('address must be bytes')
+        address = tobytes(address)
 
         if len(address) != 6:
             raise ValueError('address must be 6 bytes long')
 
-        self._address = bytes(self._STRUCT_.parse(address))
+        self._address = address
 
     @classmethod
     def fromstr(cls, mac):
@@ -51,10 +49,6 @@ class EthernetMACAddress(object):
         ]))
 
     @property
-    def raw(self):
-        return self._address
-
-    @property
     def islocal(self):
         return self._address[0] & (1 << 1)
 
@@ -67,6 +61,9 @@ class EthernetMACAddress(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self._address)
+
+    def __bytes__(self):
+        return self._address
 
 
 class EthernetFrame(object):
@@ -83,20 +80,15 @@ class EthernetFrame(object):
 
     def __init__(self, dest, source, proto, payload):
         # Coerce payload if possible
-        if hasattr(payload, '__bytes__'):
-            payload = bytes(payload)
+        payload = tobytes(payload)
 
         # Check data types
-        for name, arg, argtype in (\
-                ('dest', dest, EthernetMACAddress),
-                ('source', source, EthernetMACAddress),
-                ('proto', proto, int),
-                ('payload', payload, bytes)
-        ):
-            if (arg is not None) and \
-                    (not isinstance(arg, argtype)):
-                raise TypeError('%s must be None or %s not %s' \
-                        % (name, argtype.__name__, type(arg).__name__))
+        checktypes(
+                ('dest',    dest,       EthernetMACAddress, False),
+                ('source',  source,     EthernetMACAddress, False),
+                ('proto',   proto,      int,                False),
+                ('payload', payload,    bytes,              False)
+        )
 
     @classmethod
     def parse(cls, frame):
