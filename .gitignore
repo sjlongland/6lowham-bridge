@@ -1,0 +1,8 @@
+# vi swapfiles, editor back-ups
+.*.swp
+*.swp
+*~
+
+# python cache/objects
+*.py[co]
+__pycache__
