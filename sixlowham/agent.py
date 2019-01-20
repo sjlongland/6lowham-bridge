@@ -5,8 +5,11 @@
 import signalslot
 import weakref
 import asyncio
-import struct
+import construct
 import logging
+
+from .ethernet import EthernetMACAddress, EthernetFrame
+from .util import tobytes, checktypes
 
 # Byte definitions
 SOH     = b'\x01'
@@ -23,33 +26,30 @@ SYN     = b'\x16'
 FS      = b'\x1c'
 
 # Structure of SOH struct.
-SOH_STRUCT = struct.Struct('>6BHLB')
+SOH_STRUCT = construct.Struct(
+        "mac" / EthernetMACAddress._STRUCT_,
+        "mtu" / construct.Int16ub,
+        "idx" / construct.Int32ub,
+        "name" / construct.PascalString(construct.Byte, "utf-8")
+)
 
 class SixLowHAMAgent(object):
     """
     Wrapper class for the 6LoWHAM agent.  This provides a Python interface
-    for sending and receiving Ethernet frames via the 6LowHAM Agent.
+    for sending and receiving Ethernet frames via the 6LoWHAM Agent.
     """
     def __init__(self, agent_path=None, if_name=None, \
             if_mac=None, if_mtu=None, tx_attempts=3, log=None):
+
         # Check data types
-        for name, arg, argtype in (\
-                ('agent_path', agent_path, str),
-                ('if_name', if_name, str),
-                ('if_mac', if_mac, bytes),
-                ('if_mtu', if_mtu, int),
-                ('log', log, logging.Logger)
-        ):
-            if (arg is not None) and \
-                    (not isinstance(arg, argtype)):
-                raise TypeError('%s must be None or %s not %s' \
-                        % (name, argtype.__name__, type(arg).__name__))
-
-        if not isinstance(tx_attempts, int):
-            raise TypeError('tx_attempts must be an int not %s' % \
-                    type(tx_attempts).__name__)
-
-        # Checks out.
+        checktypes(
+                ('agent_path',  agent_path,     str,                True),
+                ('if_name',     if_name,        str,                True),
+                ('if_mac',      if_mac,         EthernetMACAddress, True),
+                ('if_mtu',      if_mtu,         int,                True),
+                ('tx_attempts', tx_attempts,    int,                False),
+                ('log',         log,            logging.Logger,     True)
+        )
 
         # Interface settings.  Make a note of which ones were supplied
         # to us by the caller in case the agent gets stopped and re-started.
@@ -110,9 +110,9 @@ class SixLowHAMAgent(object):
         if self._if_name_given:
             args += ['-n', self._if_name]
         if self._if_mac_given:
-            args += ['-a', ':'.join(['%02x' % b for b in self._if_mac])]
+            args += ['-a', str(self._if_mac)]
         if self._if_mtu_given:
-            args += ['-m', '%d' % self._if_mtu]
+            args += ['-m', str(self._if_mtu)]
 
         if self._log:
             self._log.debug('Starting agent with arguments: %s', args)
@@ -128,6 +128,7 @@ class SixLowHAMAgent(object):
         """
         Enqueue an Ethernet frame to be transmitted.
         """
+        frame = tobytes(frame)
         if self._log:
             self._log.debug('Enqueueing frame: %r', frame)
 
@@ -158,23 +159,16 @@ class SixLowHAMAgent(object):
 
         if frametype == SOH:
             # Interface information
-            ifdata = SOH_STRUCT.unpack(framedata[0:SOH_STRUCT.size])
-            # First 6 bytes are the MAC
-            self._if_mac = bytes(ifdata[0:6])
-            # Next is the MTU
-            self._if_mtu = ifdata[7]
-            # Then the interface index
-            self._if_idx = ifdata[8]
-            # Finally the length of the name field.
-            name_len = ifdata[9]
-            # The rest of the payload is the name
-            self._if_name = framedata[SOH_STRUCT.size:SOH_STRUCT.size
-                    + name_len].decode()
+            ifdata = SOH_STRUCT.parse(framedata)
+            self._if_mac = EthernetMACAddress(ifdata.mac)
+            self._if_mtu = ifdata.mtu
+            self._if_idx = ifdata.idx
+            self._if_name = ifdata.name
 
             # Emit a signal from the event loop, catch all errors.
             def emit():
                 try:
-                    self.connected.emit()
+                    self.connected.emit(agent=self)
                 except:
                     if self._log is not None:
                         self._log.exception(
@@ -183,9 +177,18 @@ class SixLowHAMAgent(object):
 
         elif frametype == FS:
             # Ethernet frame received
+            try:
+                etherframe = EthernetFrame.parse(framedata)
+            except:
+                if self._log is not None:
+                    self._log.exception(
+                            'Failed to parse frame %r', framedata)
+                self._send_frame(NAK)
+                return
+
             def emit():
                 try:
-                    self.receivedframe.emit(frame=framedata)
+                    self.receivedframe.emit(frame=etherframe)
                 except:
                     if self._log is not None:
                         self._log.exception(
