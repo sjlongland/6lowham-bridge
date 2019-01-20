@@ -95,6 +95,10 @@ class EthernetFrame(object):
         self._payload = payload
 
     @classmethod
+    def registerprotocol(cls, protocol):
+        cls._KNOWN_PROTOCOLS_[protocol._ETHERNET_PROTOCOL_] = protocol
+
+    @classmethod
     def parse(cls, frame):
         """
         Parse from raw frame bytes.
