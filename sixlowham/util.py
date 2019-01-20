@@ -21,3 +21,25 @@ def tobytes(data):
 
     raise ValueError('Unable to coerce %s object to bytes' \
             % (type(data).__name__))
+ 
+
+def checktypes(*values):
+    """
+    Check the types of all names parameters given in values.  Raise TypeError
+    if there's a problem.  The arguments are meant to be tuples of the form:
+
+    ```
+        ('nameOfArg1', varOfArg1, DataTypeClass, optionalFlag),
+        ('nameOfArg2', varOfArg2, DataTypeClass, optionalFlag),
+        …
+    ```
+    """
+    for name, arg, argtype, optional in values:
+        if ((not optional) or (arg is not None)) and \
+                (not isinstance(arg, argtype)):
+
+            raise TypeError('%s must be %s not %s' \
+                    % (name,
+                        argtype.__name__
+                        + (' or None' if optional else ''),
+                        type(arg).__name__))
