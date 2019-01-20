@@ -161,6 +161,19 @@ class IP6Datagram(object):
 
         return ip6datagram
 
+    def append_header(self, header):
+        """
+        Append the given header to the datagram.
+        """
+        try:
+            # Pass an instance of ourselves to the header, in case it needs
+            # it later for generating checksums (e.g. in ICMPv6).
+            header.datagram = self
+        except AttributeError:
+            pass
+
+        self._headers.append(header)
+
     @property
     def dest(self):
         return self._dest
