@@ -89,6 +89,10 @@ class EthernetFrame(object):
                 ('proto',   proto,      int,                False),
                 ('payload', payload,    bytes,              False)
         )
+        self._dest = dest
+        self._source = source
+        self._proto = proto
+        self._payload = payload
 
     @classmethod
     def parse(cls, frame):
